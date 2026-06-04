@@ -1,0 +1,342 @@
+# NotebookLM Clone — Architecture & Decision Log
+
+> Dokumentiert bewusste Entscheidungen, Alternativen und Tradeoffs.
+> Dies ist kein Tutorial — es ist ein Designdokument.
+
+---
+
+## Was gebaut wird
+
+Ein RAG-basiertes Dokumenten-Q&A-System. Nutzer laden Dokumente hoch,
+stellen Fragen und bekommen Antworten mit präzisen Quellenangaben —
+ausschließlich basierend auf den hochgeladenen Quellen.
+
+## Systemqualitäten (Non-Functional Requirements)
+
+Diese Eigenschaften sind keine Features — sie sind Grundanforderungen.
+
+| Qualität | Umsetzung im System |
+|---|---|
+| **Backupbar** | Named Docker Volumes, `make backup` exportiert Snapshot |
+| **Auditierbar** | Audit-Log für alle kritischen Aktionen (append-only JSON Lines) |
+| **Logbar** | Strukturiertes JSON-Logging, Request-IDs, kein sensitiver Content in Logs |
+| **Wartbar** | Clean Architecture, Dependency Injection, Custom Exceptions, Type Safety |
+| **Erweiterbar** | Protocol-Interfaces für VectorStore und LLM — neue Provider = eine Datei |
+| **DSGVO-konform** | Hard Delete, kein Content in Logs, LLM-Provider als Datenschutzentscheidung |
+
+---
+
+## Was bewusst NICHT gebaut wird (und warum)
+
+| Feature | Warum nicht |
+|---|---|
+| Audio Overview | Aufwendige TTS + Dialoggenerierung — kein Kernwert für diesen Prototyp |
+| YouTube / Web-Import | Scope Creep — PDF + TXT deckt 80% realer Use Cases ab |
+| Google Docs Integration | OAuth-Komplexität rechtfertigt den Aufwand hier nicht |
+| Sharing / Collaboration | Infrastruktur-Feature, kein Produkt-Feature |
+| Mehrere Notebooks | Kommt nach dem MVP — Datenmodell ist bereits darauf vorbereitet |
+
+---
+
+## System-Architektur
+
+```
+┌─────────────────────────────────────────────────────┐
+│                    Frontend (Next.js)               │
+│  ┌─────────────┐  ┌──────────────────────────────┐  │
+│  │  Sidebar    │  │        Chat Panel            │  │
+│  │  (Sources)  │  │  [Frage eingeben]            │  │
+│  │             │  │  ─────────────────────────── │  │
+│  │ 📄 doc1.pdf │  │  Antwort...                  │  │
+│  │ 📄 doc2.pdf │  │  ┌──────────────────────┐    │  │
+│  │             │  │  │ Quelle: doc1.pdf, S.3│    │  │
+│  └─────────────┘  │  └──────────────────────┘    │  │
+│                   └──────────────────────────────┘  │
+└─────────────────────────────────────────────────────┘
+                         │ HTTP
+┌─────────────────────────────────────────────────────┐
+│                    Backend (FastAPI)                │
+│                                                     │
+│   Upload-Flow:                                      │
+│   PDF/TXT → Parser → Chunker → Embedder → ChromaDB  │
+│                                                     │
+│   Query-Flow:                                       │
+│   Frage → Embedder → ChromaDB (Top-K) → LLM → Antwort + Quellen │
+└─────────────────────────────────────────────────────┘
+```
+
+---
+
+## Entscheidung 1: Chunking-Strategie
+
+**Problem:** Naives Chunking (alle N Zeichen) zerschneidet Sätze und verliert Kontext.
+
+**Entschieden:** Paragraph-basiertes Chunking mit Overlap
+- Absatzgrenzen respektieren (kein Satz wird durchgetrennt)
+- 10-15% Overlap zwischen aufeinanderfolgenden Chunks
+- Ziel-Chunk-Größe: ~400-600 Tokens
+
+**Alternative verworfen:** RecursiveCharacterTextSplitter von LangChain
+— funktioniert, aber versteckt die Entscheidung. Eigene Implementierung
+macht das Verhalten explizit und kontrollierbar.
+
+**Konsequenz:** Etwas mehr Code, aber vollständige Kontrolle über
+Chunk-Grenzen und Metadaten.
+
+---
+
+## Entscheidung 2: Metadaten-Modell
+
+Jeder Chunk speichert:
+```python
+{
+    "document_id": str,      # UUID des Dokuments
+    "filename": str,         # Originalname
+    "page": int,             # Seitennummer (bei PDF)
+    "chunk_index": int,      # Position im Dokument
+    "char_start": int,       # Zeichenposition Start
+    "char_end": int,         # Zeichenposition Ende
+}
+```
+
+**Warum:** Ermöglicht exakte Quellenangaben ("doc.pdf, Seite 3").
+Ohne diese Metadaten ist "Quelle: Dokument 1" die einzige Möglichkeit —
+das ist nicht besser als kein RAG.
+
+---
+
+## Entscheidung 3: Grounding-Constraint
+
+**Das Kernversprechen von NotebookLM:** Die KI antwortet NUR aus den Quellen.
+Kein Allgemeinwissen, keine Spekulationen.
+
+**Umsetzung via System Prompt:**
+> "Du bist ein präziser Dokumenten-Assistent. Beantworte Fragen
+> ausschließlich basierend auf den bereitgestellten Quellen.
+> Wenn die Antwort nicht in den Quellen enthalten ist, sage klar:
+> 'Diese Information ist in deinen Dokumenten nicht vorhanden.'
+> Halluziniere niemals. Zitiere immer die Quelle."
+
+**Warum wichtig:** Ohne diesen Constraint ist es ein normaler Chatbot
+mit Kontext-Padding. Mit diesem Constraint wird es ein verlässliches Tool.
+
+---
+
+## Entscheidung 4: Confidence Threshold
+
+Wenn die Ähnlichkeit der besten Treffer unter einem Threshold liegt
+(z.B. cosine similarity < 0.3), wird KEINE LLM-Anfrage gemacht.
+Stattdessen: direkte Antwort "Nicht in deinen Quellen gefunden."
+
+**Warum:** Verhindert, dass das LLM bei irrelevanten Retrieval-Ergebnissen
+trotzdem halluziniert. Spart API-Kosten. Macht das System ehrlicher.
+
+---
+
+## Entscheidung 5: LLM Provider Abstraction
+
+```
+LLM_PROVIDER=groq     → Groq API (Llama 3.3 70B) — Standard, schnell
+LLM_PROVIDER=openai   → OpenAI GPT-4o-mini
+LLM_PROVIDER=ollama   → lokales Modell via Ollama
+```
+
+**Warum:** Keine Vendor-Lock-in. Demo läuft mit Groq (kostenlos, schnell),
+aber das System ist designed um mit jedem OpenAI-kompatiblen Endpoint zu laufen.
+Ollama-Support zeigt, dass lokale/private Deployments möglich sind.
+
+---
+
+## Entscheidung 6: Kein LangChain
+
+LangChain wäre 10x schneller zu schreiben. Bewusst nicht verwendet, weil:
+1. Die RAG-Pipeline ist das Herzstück — sie sollte lesbar und explizit sein
+2. LangChain abstrahiert genau die Entscheidungen weg, die hier dokumentiert sind
+3. Eigene Implementierung zeigt Verständnis des Systems, nicht nur Kenntnis einer Library
+
+---
+
+## Entscheidung 7: ChromaDB als Vektorstore
+
+**Warum ChromaDB:**
+- Lokal, keine externe Infrastruktur
+- Persistenz on disk (kein Neu-Embedden bei Neustart)
+- Einfache Metadaten-Filterung
+
+**Alternative:** FAISS — schneller, aber kein Persistence, kein Metadaten-Support out-of-the-box.
+**Alternative:** Pinecone/Weaviate — cloud-managed, aber externe Abhängigkeit für einen Prototyp unnötig.
+**Alternative:** pgvector (PostgreSQL Extension) — die richtige Wahl wenn bereits PostgreSQL
+im Stack ist: ein Service statt zwei, SQL-Joins zwischen Vektoren und relationalen Daten möglich,
+production-grade. Für diesen Prototyp ohne relationale Daten (kein User-Management, keine
+Notebook-Tabellen) ist ChromaDB schlanker. Bei einem echten Multi-User-System: pgvector + Postgres.
+
+---
+
+## Entscheidung 8: Async Document Processing
+
+**Problem:** PDF-Verarbeitung (Parse → Chunk → Embed) dauert je nach Dokumentgröße 5-30 Sekunden.
+Ein synchroner Upload-Endpoint würde den HTTP-Request blockieren — schlechte UX, Timeout-Risiko.
+
+**Entschieden:** Upload gibt sofort `202 Accepted` + `job_id` zurück.
+Verarbeitung läuft als FastAPI Background Task.
+Client pollt `GET /documents/{id}/status` bis `"ready"` oder `"failed"`.
+
+```
+POST /documents  →  202 { job_id: "abc123" }
+GET  /documents/abc123/status  →  { status: "processing", progress: "embedding" }
+GET  /documents/abc123/status  →  { status: "ready" }
+```
+
+**Warum wichtig:** So werden echte Systeme gebaut. Blocking HTTP auf CPU-intensive
+Arbeit ist ein Anti-Pattern. FastAPI Background Tasks sind dafür genau das richtige Mittel.
+
+---
+
+## Entscheidung 9: Streaming via Server-Sent Events
+
+**Problem:** LLM-Antworten kommen nicht instantan — ohne Streaming wartet der Nutzer
+in Stille bis die komplette Antwort fertig ist.
+
+**Entschieden:** SSE (Server-Sent Events) statt vollständige HTTP Response.
+Stream-Protokoll: erst ein `sources`-Event mit den Quellenangaben, dann `token`-Events live.
+
+```
+event: sources
+data: [{"filename": "doc.pdf", "page": 3, "excerpt": "..."}]
+
+event: token
+data: {"text": "Laut"}
+
+event: token
+data: {"text": " Vertrag..."}
+
+event: done
+data: {}
+```
+
+**Warum SSE statt WebSocket:** SSE ist unidirektional (Server → Client), einfacher,
+kein Handshake-Overhead. Für diesen Use Case ausreichend und die richtige Wahl.
+
+---
+
+## Entscheidung 10: Pydantic Settings für Konfiguration
+
+Alle Konfigurationswerte werden über eine typisierte `Settings`-Klasse verwaltet:
+
+```python
+class Settings(BaseSettings):
+    llm_provider: Literal["groq", "openai", "ollama"] = "groq"
+    groq_api_key: SecretStr
+    confidence_threshold: float = Field(0.3, ge=0.0, le=1.0)
+    max_file_size_mb: int = Field(20, ge=1, le=100)
+    chunk_size_tokens: int = 500
+    chunk_overlap_percent: float = 0.15
+```
+
+Kein `os.getenv()` verstreut im Code. Validierung beim Start, nicht zur Laufzeit.
+Fehlende Pflicht-Werte → Fehler sofort beim Starten, nicht beim ersten Request.
+
+---
+
+## Entscheidung 11: Input Validation als eigene Schicht
+
+Upload-Validierung findet im Backend statt — nicht nur im Frontend:
+- Dateigröße-Limit (max_file_size_mb aus Settings)
+- Content-Type muss `application/pdf` oder `text/plain` sein
+- Korrupte PDFs werden in der Parser-Phase abgefangen → Job-Status "failed" + Fehlermeldung
+- Kein blindes Vertrauen auf Dateiendung
+
+**Warum:** Frontend-Validierung ist UX, Backend-Validierung ist Sicherheit.
+Beides ist nötig, keines ersetzt das andere.
+
+---
+
+## Entscheidung 12: DSGVO-Konformität
+
+### LLM-Provider-Wahl ist eine Datenschutzentscheidung
+
+Wird Groq oder OpenAI als LLM-Provider genutzt, verlässt der Dokumenteninhalt
+die eigene Infrastruktur und wird auf US-amerikanischen Servern verarbeitet.
+Für Unternehmen mit sensiblen Dokumenten bedeutet das:
+- Auftragsverarbeitungsvertrag (AVV) mit dem Provider erforderlich
+- Datentransfer in Drittland (Art. 46 DSGVO) muss abgesichert sein
+
+**Lösung:** Ollama-Support als vollständig lokale Alternative.
+Kein Byte verlässt die eigene Infrastruktur. Für DSGVO-kritische Deployments
+ist Ollama die richtige Wahl — deshalb ist es Teil der Provider-Abstraktion.
+
+Diese Entscheidung ist in `.env.example` und README dokumentiert.
+
+### Hard Delete — Recht auf Löschung (Art. 17 DSGVO)
+
+`DELETE /documents/{id}` ist ein echtes Hard Delete:
+1. Originaldatei vom Dateisystem entfernt
+2. Alle Chunks aus ChromaDB gelöscht
+3. Job-Status-Eintrag entfernt
+4. Audit-Event geschrieben
+
+Es gibt kein Soft-Delete, kein "markiert als gelöscht". Gelöscht bedeutet gelöscht.
+
+### Was niemals geloggt wird
+
+- Dokumenteninhalt (weder in Application- noch Audit-Log)
+- Query-Text des Nutzers (potenziell personenbezogene Daten)
+- Dateiinhalte in Fehlermeldungen
+
+Was geloggt wird: Metadaten (document_id, filename, size, Anzahl Chunks, Scores, Durations).
+
+---
+
+## Entscheidung 13: Audit-Log
+
+Neben dem Application-Log gibt es einen separaten Audit-Log als append-only JSON Lines Datei.
+
+**Zweck:** Nachvollziehbarkeit aller kritischen Aktionen — wann wurde was hochgeladen,
+verarbeitet, abgefragt, gelöscht.
+
+**Audit-Events:**
+```json
+{"ts": "2025-01-15T10:23:41Z", "event": "document.uploaded",   "document_id": "abc", "filename": "vertrag.pdf", "size_bytes": 204800, "pages": 12}
+{"ts": "2025-01-15T10:23:45Z", "event": "document.ready",      "document_id": "abc", "chunks": 47, "duration_ms": 3821}
+{"ts": "2025-01-15T10:24:12Z", "event": "chat.queried",        "query_id": "xyz",   "document_ids": ["abc"], "sources_found": 3}
+{"ts": "2025-01-15T10:31:05Z", "event": "document.deleted",    "document_id": "abc", "filename": "vertrag.pdf"}
+{"ts": "2025-01-15T10:45:22Z", "event": "document.failed",     "document_id": "def", "error_type": "ParseError"}
+```
+
+**Bewusst nicht im Audit-Log:**
+- Query-Text (Datenschutz)
+- Dokumenteninhalt (Datenschutz)
+- LLM-Antworten (Datenschutz)
+
+---
+
+## Entscheidung 14: Backup-Strategie
+
+Alle persistenten Daten liegen in named Docker Volumes:
+- `chroma_data` — Vektordatenbank + Embeddings
+- `uploads_data` — Originaldateien
+- `audit_data` — Audit-Log
+
+`make backup` erstellt einen timestamped Snapshot beider Volumes:
+```bash
+backup/
+└── 2025-01-15_10-30-00/
+    ├── chroma_data.tar.gz
+    ├── uploads_data.tar.gz
+    └── audit_data.tar.gz
+```
+
+Restore: `make restore BACKUP=2025-01-15_10-30-00`
+
+**Warum wichtig:** Ein System ohne Backup-Strategie ist kein Production-System.
+Die Strategie muss dokumentiert und testbar sein — nicht nur "wir könnten es machen".
+
+---
+
+## Was als nächstes käme (v2)
+
+1. **Hybrid Search** — BM25 (Keyword) + Vektorsuche kombinieren → bessere Treffer
+2. **Mehrere Notebooks** — Datenmodell bereits vorbereitet (document_id mit notebook_id verknüpfen)
+3. **Reranking** — Cross-Encoder nach initialem Retrieval für höhere Präzision
+4. **Streaming** — LLM-Antworten token-by-token streamen (UX)
+5. **OCR** — Gescannte PDFs via Tesseract/pymupdf unterstützen

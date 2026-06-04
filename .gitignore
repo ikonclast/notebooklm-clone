@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+
+# Env
+.env
+
+# ChromaDB data
+backend/chroma_db/
+
+# Uploads
+backend/uploads/
+
+# Node
+node_modules/
+frontend/.next/
+
+# OS
+.DS_Store
