@@ -19,17 +19,21 @@ class ParseError(Exception):
     """
 
 
-def parse_pdf(path: str | Path) -> list[Page]:
+def parse_pdf(path: str | Path, display_name: str | None = None) -> list[Page]:
     """Extrahiert Text seitenweise aus einer PDF.
+
+    display_name wird nur für Fehlermeldungen genutzt (Originalname statt
+    interner Temp-Dateiname).
 
     Raises:
         ParseError: PDF nicht öffenbar oder ohne extrahierbaren Text.
     """
     path = Path(path)
+    name = display_name or path.name
     try:
         doc = fitz.open(path)
     except Exception as exc:  # PyMuPDF wirft diverse Typen bei kaputten Dateien
-        raise ParseError(f"PDF konnte nicht geöffnet werden: {path.name}") from exc
+        raise ParseError(f"PDF konnte nicht geöffnet werden: {name}") from exc
 
     try:
         pages: list[Page] = [
@@ -42,7 +46,7 @@ def parse_pdf(path: str | Path) -> list[Page]:
     if not any(str(p["text"]).strip() for p in pages):
         # Reiner Bild-/Scan-PDF ohne Textlayer — ohne OCR nichts zu holen.
         raise ParseError(
-            f"PDF enthält keinen extrahierbaren Text (evtl. gescannt): {path.name}"
+            f"PDF enthält keinen extrahierbaren Text (evtl. gescannt): {name}"
         )
 
     return pages
@@ -62,5 +66,5 @@ def parse_txt(path: str | Path) -> list[Page]:
 def parse_document(path: str | Path, filename: str) -> list[Page]:
     """Wählt den Parser anhand der Dateiendung."""
     if filename.lower().endswith(".pdf"):
-        return parse_pdf(path)
+        return parse_pdf(path, display_name=filename)
     return parse_txt(path)

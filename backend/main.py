@@ -12,7 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from config import APP_VERSION, get_settings
 from logging_setup import new_request_id, setup_logging
-from routers import health
+from routers import documents, health
 
 
 @asynccontextmanager
@@ -56,6 +56,7 @@ def create_app() -> FastAPI:
         return response
 
     app.include_router(health.router)
+    app.include_router(documents.router)
     return app
 
 
