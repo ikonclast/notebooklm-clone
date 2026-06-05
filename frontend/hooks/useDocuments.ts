@@ -18,18 +18,23 @@ export function useDocuments({ onError }: UseDocumentsOptions = {}) {
   const docsRef = useRef<JobStatus[]>(docs);
   docsRef.current = docs;
 
+  // onError über Ref halten: so muss es NICHT in Effekt-/Callback-Deps und
+  // löst keinen Re-Render-Loop aus (onError ist bei jedem Render eine neue Fn).
+  const onErrorRef = useRef(onError);
+  onErrorRef.current = onError;
+
   const upsert = useCallback((next: JobStatus) => {
     setDocs((prev) =>
       prev.map((d) => (d.document_id === next.document_id ? next : d)),
     );
   }, []);
 
-  // Initiales Laden
+  // Initiales Laden — genau einmal beim Mount.
   useEffect(() => {
     listDocuments()
       .then(setDocs)
-      .catch(() => onError?.("Dokumente konnten nicht geladen werden."));
-  }, [onError]);
+      .catch(() => onErrorRef.current?.("Dokumente konnten nicht geladen werden."));
+  }, []);
 
   // Ein einziger Poll-Timer für die Lebensdauer; liest den aktuellen Stand per Ref.
   // Pollt nur Dokumente in pending/processing, bis ready|failed.
@@ -52,11 +57,11 @@ export function useDocuments({ onError }: UseDocumentsOptions = {}) {
     async (file: File) => {
       const name = file.name || "datei";
       if (!ACCEPTED_EXT.test(name)) {
-        onError?.("Nicht unterstützter Dateityp", `„${name}" — nur PDF & TXT sind erlaubt.`);
+        onErrorRef.current?.("Nicht unterstützter Dateityp", `„${name}" — nur PDF & TXT sind erlaubt.`);
         return;
       }
       if (file.size > MAX_BYTES) {
-        onError?.("Datei zu groß (max. 20 MB)", `„${name}" überschreitet das Limit.`);
+        onErrorRef.current?.("Datei zu groß (max. 20 MB)", `„${name}" überschreitet das Limit.`);
         return;
       }
       try {
@@ -73,10 +78,10 @@ export function useDocuments({ onError }: UseDocumentsOptions = {}) {
         setDocs((prev) => [optimistic, ...prev]);
       } catch (err) {
         const msg = err instanceof ApiError ? err.message : "Upload fehlgeschlagen.";
-        onError?.(msg, name);
+        onErrorRef.current?.(msg, name);
       }
     },
-    [onError],
+    [],
   );
 
   const uploadFiles = useCallback(
@@ -87,13 +92,10 @@ export function useDocuments({ onError }: UseDocumentsOptions = {}) {
   );
 
   // Optimistisches Entfernen; DELETE läuft im Hintergrund (Hard Delete im Backend).
-  const remove = useCallback(
-    (id: string) => {
-      setDocs((prev) => prev.filter((d) => d.document_id !== id));
-      deleteDocument(id).catch(() => onError?.("Löschen fehlgeschlagen."));
-    },
-    [onError],
-  );
+  const remove = useCallback((id: string) => {
+    setDocs((prev) => prev.filter((d) => d.document_id !== id));
+    deleteDocument(id).catch(() => onErrorRef.current?.("Löschen fehlgeschlagen."));
+  }, []);
 
   return { docs, uploadFiles, remove };
 }

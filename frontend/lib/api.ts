@@ -7,8 +7,9 @@ import type {
   UploadResponse,
 } from "@/types";
 
-const API_BASE =
-  process.env.NEXT_PUBLIC_API_BASE?.replace(/\/$/, "") ?? "http://localhost:8000";
+// Default: Same-Origin-Proxy (/api → Next-Rewrite → Backend). Override via Env
+// nur nötig, wenn das Backend direkt (ohne Proxy) angesprochen werden soll.
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE?.replace(/\/$/, "") ?? "/api";
 
 /** HTTP-Fehler mit Statuscode, damit die UI 413/415 unterscheiden kann. */
 export class ApiError extends Error {
