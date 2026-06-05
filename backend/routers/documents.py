@@ -14,26 +14,34 @@ import uuid
 from dataclasses import dataclass
 from pathlib import Path
 
-from fastapi import APIRouter, BackgroundTasks, File, HTTPException, UploadFile
+from fastapi import APIRouter, BackgroundTasks, File, HTTPException, Response, UploadFile
 
 from audit import write_audit_event
 from config import get_settings
 from models.schemas import JobStatus
 from services.chunker import chunk_document
 from services.embedder import get_embedder
-from services.parser import ParseError, parse_document
+from services.parser import ParseError, parse_pdf, parse_txt
 from services.vectorstore import get_vector_store
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/documents", tags=["documents"])
 
+# Erlaubte Content-Types. Validiert wird der Content-Type, nicht die Endung.
+CONTENT_TYPE_PDF = "application/pdf"
+CONTENT_TYPE_TXT = "text/plain"
+ALLOWED_CONTENT_TYPES = {CONTENT_TYPE_PDF, CONTENT_TYPE_TXT}
+
+_READ_CHUNK = 1024 * 1024  # 1 MiB
+
 
 @dataclass
 class _Job:
-    """Interner Job-Eintrag: öffentlicher Status + Pfad der Originaldatei."""
+    """Interner Job-Eintrag: öffentlicher Status + Pfad + Content-Type."""
 
     status: JobStatus
     path: Path
+    content_type: str
 
 
 # In-Memory Job-Store (MVP). Zugriff nur aus dem single-worker-Prozess.
@@ -41,8 +49,14 @@ _jobs: dict[str, _Job] = {}
 
 
 def _update(doc_id: str, **fields: object) -> None:
-    """Aktualisiert den Status eines Jobs immutable (pydantic model_copy)."""
-    job = _jobs[doc_id]
+    """Aktualisiert den Status eines Jobs immutable (pydantic model_copy).
+
+    Tolerant gegenüber zwischenzeitlich gelöschten Jobs (DSGVO Hard Delete):
+    ein gelöschter Job wird nicht wiederbelebt.
+    """
+    job = _jobs.get(doc_id)
+    if job is None:
+        return
     job.status = job.status.model_copy(update=fields)
 
 
@@ -56,7 +70,11 @@ def _process_document(doc_id: str) -> None:
     started = time.monotonic()
     try:
         _update(doc_id, status="processing", stage="parsing")
-        pages = parse_document(job.path, filename)
+        # Dispatch nach validiertem Content-Type, nicht nach Dateiendung.
+        if job.content_type == CONTENT_TYPE_PDF:
+            pages = parse_pdf(job.path, display_name=filename)
+        else:
+            pages = parse_txt(job.path)
 
         _update(doc_id, stage="chunking")
         chunks = chunk_document(pages, doc_id, filename)
@@ -115,23 +133,52 @@ def _process_document(doc_id: str) -> None:
         )
 
 
+async def _read_within_limit(file: UploadFile, max_bytes: int) -> bytes:
+    """Liest die Datei in Blöcken und bricht bei Überschreitung des Limits ab —
+    so wird eine übergroße Datei nie vollständig in den Speicher geladen."""
+    chunks: list[bytes] = []
+    total = 0
+    while chunk := await file.read(_READ_CHUNK):
+        total += len(chunk)
+        if total > max_bytes:
+            raise HTTPException(
+                status_code=413,
+                detail=f"Datei zu groß (max. {max_bytes // (1024 * 1024)} MB).",
+            )
+        chunks.append(chunk)
+    return b"".join(chunks)
+
+
+def _validate_content_type(file: UploadFile) -> None:
+    """Validierung als eigene Schicht (ARCHITECTURE.md, Entscheidung 11)."""
+    if file.content_type not in ALLOWED_CONTENT_TYPES:
+        raise HTTPException(
+            status_code=415,
+            detail=(
+                f"Nicht unterstützter Dateityp: {file.content_type}. "
+                "Erlaubt: PDF, TXT."
+            ),
+        )
+
+
 @router.post("", status_code=202)
 async def upload_document(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
 ) -> dict[str, str]:
-    """Nimmt eine Datei an, speichert sie und stößt die Verarbeitung an.
-
-    Antwortet sofort mit 202 + job_id. (Vollständige Eingabe-Validierung folgt
-    in Block 6.)
-    """
+    """Nimmt eine Datei an, validiert sie, speichert sie und stößt die
+    Verarbeitung an. Antwortet sofort mit 202 + job_id."""
     settings = get_settings()
+
+    # Validierung VOR dem Schreiben — ungültige Uploads hinterlassen nichts.
+    _validate_content_type(file)
+    content = await _read_within_limit(file, settings.max_file_size_mb * 1024 * 1024)
+
     doc_id = uuid.uuid4().hex
     filename = file.filename or "unbenannt"
 
     settings.upload_dir.mkdir(parents=True, exist_ok=True)
     dest = settings.upload_dir / f"{doc_id}{Path(filename).suffix}"
-    content = await file.read()
     dest.write_bytes(content)
 
     _jobs[doc_id] = _Job(
@@ -142,6 +189,7 @@ async def upload_document(
             stage="queued",
         ),
         path=dest,
+        content_type=file.content_type or CONTENT_TYPE_TXT,
     )
     write_audit_event(
         "document.uploaded",
@@ -166,3 +214,25 @@ async def get_status(doc_id: str) -> JobStatus:
     if job is None:
         raise HTTPException(status_code=404, detail="Dokument nicht gefunden.")
     return job.status
+
+
+@router.delete("/{doc_id}", status_code=204)
+async def delete_document(doc_id: str) -> Response:
+    """Echtes Hard Delete (DSGVO Art. 17) — gelöscht heißt gelöscht.
+
+    Reihenfolge: Originaldatei → ChromaDB-Chunks → Job-Status → Audit-Event.
+    """
+    job = _jobs.get(doc_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Dokument nicht gefunden.")
+
+    filename = job.status.filename
+    job.path.unlink(missing_ok=True)          # 1. Originaldatei vom Dateisystem
+    get_vector_store().delete_document(doc_id)  # 2. alle Chunks aus ChromaDB
+    del _jobs[doc_id]                          # 3. Job-Status aus dem Speicher
+
+    write_audit_event(                          # 4. Audit-Event
+        "document.deleted", document_id=doc_id, filename=filename
+    )
+    logger.info("document deleted", extra={"document_id": doc_id})
+    return Response(status_code=204)
