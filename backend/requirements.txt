@@ -15,6 +15,9 @@ sentence-transformers==3.3.1
 
 # --- Vector store ---
 chromadb==0.6.3
+# posthog gepinnt: chromadb 0.6.3 nutzt die alte capture()-API; posthog >=6
+# bricht die Signatur. Mit anonymized_telemetry=False ist Telemetrie ohnehin aus.
+posthog==3.7.0
 
 # --- LLM clients (OpenAI-compatible: Groq, OpenAI, Ollama) ---
 openai==1.59.6
