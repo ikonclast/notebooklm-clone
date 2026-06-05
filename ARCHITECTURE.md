@@ -131,6 +131,13 @@ Stattdessen: direkte Antwort "Nicht in deinen Quellen gefunden."
 **Warum:** Verhindert, dass das LLM bei irrelevanten Retrieval-Ergebnissen
 trotzdem halluziniert. Spart API-Kosten. Macht das System ehrlicher.
 
+**Zur Kalibrierung:** Der Wert 0.3 ist ein sinnvoller Startwert für `all-MiniLM-L6-v2`,
+aber nicht universell gültig. Cosine-Similarity-Verteilungen hängen vom Embedding-Modell
+und Dokumenttyp ab. Der richtige Ansatz für ein Produktivsystem: Testset mit bekannten
+Fragen aufbauen und den Threshold per F1-Score (Precision/Recall) empirisch optimieren.
+Der Wert ist daher als `confidence_threshold` in Pydantic Settings konfigurierbar —
+nicht hart kodiert.
+
 ---
 
 ## Entscheidung 5: LLM Provider Abstraction
@@ -156,6 +163,25 @@ LangChain wäre 10x schneller zu schreiben. Bewusst nicht verwendet, weil:
 
 ---
 
+## Entscheidung 6b: Kein Claude API native Document Support
+
+**Verworfene Alternative:** Claude's File API ermöglicht es, PDFs direkt hochzuladen und ohne
+eigene Embedding-Pipeline zu befragen — einfacher zu implementieren, weniger Infrastruktur.
+
+**Warum verworfen:**
+1. **Vendor-Lock-in:** Das System läuft nur mit Anthropic-Zugang. Keine lokale Alternative möglich.
+2. **DSGVO:** Dokumenteninhalt verlässt bei Cloud-Providern immer die eigene Infrastruktur.
+   Mit der eigenen RAG-Pipeline + Ollama ist ein vollständig lokales Deployment möglich.
+3. **Quellenangaben:** Claude's File API gibt keine Chunk-Level-Quellenangaben zurück —
+   das zentrale Feature ("doc.pdf, Seite 3") wäre nicht ohne eigene Implementierung realisierbar.
+4. **Demonstrierbarkeit:** Die eigene RAG-Pipeline ist das Herzstück das erklärt und bewertet werden kann.
+   Eine Black-Box-API zeigt kein Systemverständnis.
+
+**Was stattdessen:** Provider-Abstraktion mit Ollama-Support als default in Docker Compose —
+vollständig lokal, kein Byte verlässt die Infrastruktur.
+
+---
+
 ## Entscheidung 7: ChromaDB als Vektorstore
 
 **Warum ChromaDB:**
@@ -169,6 +195,11 @@ LangChain wäre 10x schneller zu schreiben. Bewusst nicht verwendet, weil:
 im Stack ist: ein Service statt zwei, SQL-Joins zwischen Vektoren und relationalen Daten möglich,
 production-grade. Für diesen Prototyp ohne relationale Daten (kein User-Management, keine
 Notebook-Tabellen) ist ChromaDB schlanker. Bei einem echten Multi-User-System: pgvector + Postgres.
+
+**Concurrency-Hinweis:** ChromaDB embedded (in-process) ist nicht thread-safe bei parallelen
+Schreibzugriffen aus mehreren Prozessen. Dieses System läuft bewusst als single-worker
+FastAPI-Instanz (`--workers 1`). Das ist für einen Prototyp korrekt. Bei einem Multi-User-System
+wäre entweder ChromaDB als separater HTTP-Service oder der Wechsel zu pgvector die richtige Lösung.
 
 ---
 
@@ -330,6 +361,59 @@ Restore: `make restore BACKUP=2025-01-15_10-30-00`
 
 **Warum wichtig:** Ein System ohne Backup-Strategie ist kein Production-System.
 Die Strategie muss dokumentiert und testbar sein — nicht nur "wir könnten es machen".
+
+---
+
+## Entscheidung 15: Ollama in Docker Compose — vollständig selbst-contained
+
+**Ziel:** `docker compose up` startet das gesamte System inklusive lokalem LLM.
+Kein externer API-Key erforderlich für den Default-Betrieb.
+
+**Umsetzung via Init-Container-Muster:**
+
+```yaml
+ollama:
+  image: ollama/ollama
+  volumes:
+    - ollama_data:/root/.ollama
+  healthcheck:
+    test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
+    interval: 10s
+    retries: 10
+
+ollama-pull:                          # läuft einmal, dann fertig
+  image: ollama/ollama
+  depends_on:
+    ollama:
+      condition: service_healthy
+  environment:
+    - OLLAMA_HOST=http://ollama:11434
+  entrypoint: ["ollama", "pull", "llama3.2:3b"]
+  restart: "no"
+
+backend:
+  depends_on:
+    ollama-pull:
+      condition: service_completed_successfully
+```
+
+Das `ollama_data`-Volume speichert das Modell persistent: beim zweiten `docker compose up`
+ist kein erneuter Download nötig.
+
+**Modellwahl:** `llama3.2:3b` (~2GB) — läuft auf CPU, benötigt ~4GB RAM, ausreichend für
+RAG-Anwendungen (das Modell fasst nur retrieved Context zusammen, kein Weltwissen nötig).
+
+**Warum das wichtig ist:** Default `LLM_PROVIDER=ollama` in docker-compose.yml bedeutet:
+das System ist out-of-the-box DSGVO-konform. Kein Byte verlässt die Infrastruktur.
+Cloud-Provider (Groq, OpenAI) sind opt-in via `.env` — mit explizitem DSGVO-Hinweis.
+
+**Für das Embedding-Modell (sentence-transformers):**
+Das Modell wird zur Docker-Build-Zeit heruntergeladen, nicht zur Laufzeit:
+```dockerfile
+RUN python -c "from sentence_transformers import SentenceTransformer; \
+               SentenceTransformer('all-MiniLM-L6-v2')"
+```
+`docker compose up` startet sofort. Kein Warten auf Downloads nach dem Build.
 
 ---
 
