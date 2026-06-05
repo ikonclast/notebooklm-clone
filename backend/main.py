@@ -5,12 +5,13 @@ Bindet Router ein, konfiguriert CORS und verwaltet den Anwendungs-Lebenszyklus
 """
 
 from contextlib import asynccontextmanager
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Awaitable, Callable
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 
 from config import APP_VERSION, get_settings
+from logging_setup import new_request_id, setup_logging
 from routers import health
 
 
@@ -26,6 +27,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 
 def create_app() -> FastAPI:
+    setup_logging()
     settings = get_settings()
     app = FastAPI(
         title="NotebookLM Clone",
@@ -40,6 +42,18 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+    @app.middleware("http")
+    async def request_id_middleware(
+        request: Request,
+        call_next: Callable[[Request], Awaitable[Response]],
+    ) -> Response:
+        """Vergibt pro Request eine ID für korrelierbare Logs und gibt sie
+        im Response-Header zurück."""
+        rid = new_request_id()
+        response = await call_next(request)
+        response.headers["X-Request-ID"] = rid
+        return response
 
     app.include_router(health.router)
     return app
