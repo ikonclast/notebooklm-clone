@@ -26,10 +26,17 @@ class Settings(BaseSettings):
 
     # --- LLM Provider ---
     llm_provider: Literal["groq", "openai", "ollama"] = "ollama"
+
     groq_api_key: SecretStr = SecretStr("")
+    groq_model: str = "llama-3.3-70b-versatile"
+
     openai_api_key: SecretStr = SecretStr("")
+    openai_model: str = "gpt-4o-mini"
+
     ollama_base_url: str = "http://ollama:11434"
     ollama_model: str = "llama3.2:3b"
+    # Optional — nur für Ollama Cloud/Turbo nötig. Lokales Ollama braucht keinen Key.
+    ollama_api_key: SecretStr = SecretStr("")
 
     # --- Retrieval ---
     confidence_threshold: float = Field(0.3, ge=0.0, le=1.0)
