@@ -1,0 +1,34 @@
+import { IconMenu, IconMoon, IconSun, Logo } from "@/components/icons";
+
+interface HeaderProps {
+  dark: boolean;
+  onToggleDark: () => void;
+  onMenu: () => void;
+}
+
+export function Header({ dark, onToggleDark, onMenu }: HeaderProps) {
+  return (
+    <header className="shrink-0 flex items-center justify-between h-14 px-4 border-b border-zinc-200/80 dark:border-zinc-800 bg-white/80 dark:bg-zinc-900/80 backdrop-blur-sm">
+      <div className="flex items-center gap-2.5">
+        <button
+          onClick={onMenu}
+          aria-label="Quellen öffnen"
+          className="md:hidden -ml-1 p-2 rounded-lg text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+        >
+          <IconMenu className="w-5 h-5" />
+        </button>
+        <Logo className="w-6 h-6" />
+        <span className="text-[15px] font-semibold tracking-tight text-zinc-800 dark:text-zinc-100">
+          NotebookLM <span className="font-normal text-zinc-400 dark:text-zinc-500">Clone</span>
+        </span>
+      </div>
+      <button
+        onClick={onToggleDark}
+        aria-label="Theme wechseln"
+        className="p-2 rounded-lg text-zinc-500 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+      >
+        {dark ? <IconSun className="w-[18px] h-[18px]" /> : <IconMoon className="w-[18px] h-[18px]" />}
+      </button>
+    </header>
+  );
+}
