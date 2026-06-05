@@ -20,3 +20,6 @@ frontend/.next/
 
 # OS
 .DS_Store
+
+# Agent-Session-Logs (persönliche Bewerbungs-Artefakte, lokal sammeln & separat versenden)
+session_logging/
