@@ -13,6 +13,7 @@ from pydantic import BaseModel, Field
 DocumentStatus = Literal["pending", "processing", "ready", "failed"]
 ProcessingStage = Literal["queued", "parsing", "chunking", "embedding", "storing", "done"]
 Role = Literal["system", "user", "assistant"]
+ProviderId = Literal["ollama", "groq", "openai"]
 
 
 def _utcnow() -> datetime:
@@ -94,10 +95,14 @@ class ChatMessage(BaseModel):
 
 
 class ChatRequest(BaseModel):
-    """Eingehende Chat-Anfrage. document_ids grenzt die Suche auf gewählte Quellen ein."""
+    """Eingehende Chat-Anfrage. document_ids grenzt die Suche auf gewählte Quellen ein.
+
+    provider erlaubt das Umschalten des LLM zur Laufzeit (None → Server-Default).
+    """
 
     query: str = Field(min_length=1)
     document_ids: list[str] = Field(min_length=1)
+    provider: ProviderId | None = None
 
 
 class ChatResponse(BaseModel):
@@ -105,3 +110,30 @@ class ChatResponse(BaseModel):
 
     answer: str
     sources: list[Source]
+
+
+class ProviderInfo(BaseModel):
+    """Ein LLM-Provider und ob er gerade nutzbar ist (Key gesetzt / erreichbar)."""
+
+    id: ProviderId
+    label: str
+    model: str
+    available: bool
+
+
+class ProvidersResponse(BaseModel):
+    """Antwort von GET /providers — Auswahl fürs Frontend plus aktueller Default."""
+
+    default: ProviderId
+    providers: list[ProviderInfo]
+
+
+class SuggestionsRequest(BaseModel):
+    """Fragen-Vorschläge aus dem Inhalt der gewählten Dokumente generieren."""
+
+    document_ids: list[str] = Field(min_length=1)
+    provider: ProviderId | None = None
+
+
+class SuggestionsResponse(BaseModel):
+    questions: list[str]

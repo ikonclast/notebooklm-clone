@@ -115,7 +115,14 @@ async def _event_stream(req: ChatRequest) -> AsyncIterator[str]:
     ]
     yield _sse("sources", [s.model_dump() for s in sources])
 
-    provider = get_llm_provider(settings)
+    try:
+        provider = get_llm_provider(settings, req.provider)
+    except ValueError as exc:
+        # z. B. gewählter Cloud-Provider ohne API-Key.
+        yield _sse("error", {"message": str(exc)})
+        yield _sse("done", {})
+        return
+
     try:
         async for delta in provider.stream_chat(_build_messages(req.query, results)):
             yield _sse("token", {"text": delta})

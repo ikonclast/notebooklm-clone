@@ -93,6 +93,21 @@ class VectorStore:
             )
         return results
 
+    def get_document_text(self, doc_id: str, max_chunks: int = 4) -> str:
+        """Text der ersten Chunks eines Dokuments (nach chunk_index sortiert).
+
+        Ohne Query — für die Generierung von Fragen-Vorschlägen aus dem Inhalt.
+        """
+        res = self._collection.get(
+            where={"document_id": doc_id},
+            include=["documents", "metadatas"],
+        )
+        pairs = sorted(
+            zip(res["documents"], res["metadatas"]),
+            key=lambda p: int(p[1]["chunk_index"]),
+        )
+        return "\n\n".join(text for text, _ in pairs[:max_chunks])
+
     def delete_document(self, doc_id: str) -> None:
         """Entfernt alle Chunks eines Dokuments (DSGVO Hard Delete, Teil davon)."""
         self._collection.delete(where={"document_id": doc_id})
