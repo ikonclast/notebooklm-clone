@@ -24,6 +24,7 @@ export interface JobStatus {
 
 // Im SSE "sources"-Event als Array
 export interface Source {
+  document_id: string;
   filename: string;
   page: number;
   excerpt: string;

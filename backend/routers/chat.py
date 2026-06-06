@@ -107,6 +107,7 @@ async def _event_stream(req: ChatRequest) -> AsyncIterator[str]:
 
     sources = [
         Source(
+            document_id=r.document_id,
             filename=r.filename,
             page=r.page,
             excerpt=_excerpt(r.text),

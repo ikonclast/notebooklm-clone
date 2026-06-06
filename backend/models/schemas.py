@@ -79,8 +79,12 @@ class JobStatus(BaseModel):
 
 
 class Source(BaseModel):
-    """Eine Quellenangabe in einer Chat-Antwort."""
+    """Eine Quellenangabe in einer Chat-Antwort.
 
+    document_id erlaubt dem Frontend, das Original zu verlinken
+    (GET /documents/{id}/file#page=…)."""
+
+    document_id: str
     filename: str
     page: int
     excerpt: str

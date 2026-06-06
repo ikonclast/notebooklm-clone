@@ -15,6 +15,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from fastapi import APIRouter, BackgroundTasks, File, HTTPException, Response, UploadFile
+from fastapi.responses import FileResponse
 
 from audit import write_audit_event
 from config import get_settings
@@ -214,6 +215,24 @@ async def get_status(doc_id: str) -> JobStatus:
     if job is None:
         raise HTTPException(status_code=404, detail="Dokument nicht gefunden.")
     return job.status
+
+
+@router.get("/{doc_id}/file")
+async def get_file(doc_id: str) -> FileResponse:
+    """Liefert die Originaldatei aus — inline, damit der Browser sie direkt anzeigt
+    (PDF-Viewer springt per #page=N auf die zitierte Seite).
+
+    Kein Path-Traversal: doc_id ist nur ein Lookup-Schlüssel, der ausgelieferte
+    Pfad stammt aus dem intern verwalteten Job."""
+    job = _jobs.get(doc_id)
+    if job is None or not job.path.exists():
+        raise HTTPException(status_code=404, detail="Dokument nicht gefunden.")
+    return FileResponse(
+        path=job.path,
+        media_type=job.content_type,
+        filename=job.status.filename,
+        content_disposition_type="inline",
+    )
 
 
 @router.delete("/{doc_id}", status_code=204)
