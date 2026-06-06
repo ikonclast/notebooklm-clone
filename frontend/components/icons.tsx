@@ -73,6 +73,12 @@ export const IconStop = (p: IconProps) => (
     <rect x="6.5" y="6.5" width="11" height="11" rx="2" />
   </Ic>
 );
+export const IconExternal = (p: IconProps) => (
+  <Ic
+    {...p}
+    d="M14 5h5v5M18.5 5.5 11 13M12 5H6.5A1.5 1.5 0 0 0 5 6.5v11A1.5 1.5 0 0 0 6.5 19h11a1.5 1.5 0 0 0 1.5-1.5V12"
+  />
+);
 export const IconSearch = (p: IconProps) => (
   <Ic {...p}>
     <circle cx="11" cy="11" r="6.5" />

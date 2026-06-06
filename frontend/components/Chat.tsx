@@ -6,6 +6,7 @@ import {
   IconAlert,
   IconChevron,
   IconDoc,
+  IconExternal,
   IconQuote,
   IconRetry,
   IconSearch,
@@ -14,6 +15,7 @@ import {
   Logo,
   Spinner,
 } from "@/components/icons";
+import { documentFileUrl } from "@/lib/api";
 import type { ChatMessage, Source } from "@/types";
 
 // **fett** innerhalb des Antworttexts rendern
@@ -55,10 +57,17 @@ function ExcerptCard({ src }: { src: Source }) {
         </p>
       </div>
       <div className="flex items-center justify-between gap-3 px-3.5 py-2 border-t border-zinc-200/70 dark:border-zinc-700/50 bg-white/50 dark:bg-zinc-900/30">
-        <span className="flex items-center gap-1.5 text-[11.5px] font-medium text-zinc-500 dark:text-zinc-400 min-w-0">
+        <a
+          href={documentFileUrl(src.document_id, src.page)}
+          target="_blank"
+          rel="noopener noreferrer"
+          title={`Original öffnen — Seite ${src.page}`}
+          className="group/link flex items-center gap-1.5 text-[11.5px] font-medium text-zinc-500 dark:text-zinc-400 min-w-0 hover:text-accent-600 dark:hover:text-accent-400 transition-colors"
+        >
           <span className="truncate">{src.filename}</span>
           <span className="text-zinc-400 dark:text-zinc-600 shrink-0">· S. {src.page}</span>
-        </span>
+          <IconExternal className="w-3.5 h-3.5 shrink-0 opacity-50 group-hover/link:opacity-100 transition-opacity" />
+        </a>
         <ScorePill score={src.score} />
       </div>
     </div>

@@ -24,6 +24,12 @@ export class ApiError extends Error {
   }
 }
 
+/** URL zum Original-Dokument, mit Sprungmarke auf die zitierte Seite (#page=N).
+ *  Direkt im Browser aufrufbar (Same-Origin-Proxy → Backend). */
+export function documentFileUrl(documentId: string, page: number): string {
+  return `${API_BASE}/documents/${documentId}/file#page=${page}`;
+}
+
 async function parseDetail(res: Response, fallback: string): Promise<string> {
   try {
     const body = (await res.json()) as { detail?: string };
