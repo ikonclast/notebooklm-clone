@@ -133,6 +133,13 @@ cd frontend && npm install && npm run dev
 Oder beides parallel: `make dev`. Qualität: `make test` (TypeScript-Check +
 Backend-Smoke), `make lint` (ruff + eslint).
 
+**Datenablage ohne Docker:** Uploads, Vektor-DB und Audit-Log liegen persistent
+unter `backend/data/` (gitignored) — bewusst **nicht** `/tmp`, das beim Reboot
+verloren ginge. Andere Pfade per `backend/.env` setzen (`UPLOAD_DIR`,
+`CHROMA_PATH`, `AUDIT_LOG_PATH`). Im Docker-Betrieb liegen dieselben Daten in den
+named Volumes unter `/data/*`. Das System ist damit auch ohne Docker exportierbar
+und lauffähig.
+
 ---
 
 ## Projektstruktur

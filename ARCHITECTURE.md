@@ -445,6 +445,33 @@ in Compose `http://backend:8000`.
 
 ---
 
+## Bekannte Grenzen (offen, bewusst dokumentiert)
+
+**Confidence-Threshold vs. Paraphrasen bei kleinen Dokumenten.**
+Der Threshold (`CONFIDENCE_THRESHOLD=0.3`) verhindert Halluzinationen: liegt der
+beste Retrieval-Score darunter, antwortet das System ehrlich „nicht vorhanden",
+statt zu raten. Beobachtung beim Test mit einem *sehr kleinen* Dokument (ein
+einziger Chunk mit mehreren Themen): Eine paraphrasierte Frage („Wie lange ist die
+Garantie?" gegen den Satz „Die Garantie … beträgt 24 Monate …") kann knapp unter
+0.3 fallen und fälschlich als „nicht gefunden" gelten. Grund: Ein Chunk, der mehrere
+Themen mischt, ergibt einen gemittelten Embedding-Vektor, der zu einer spezifischen
+Frage schwächer passt. Bei realistischen Dokumenten (viele, thematisch engere Chunks)
+tritt das deutlich seltener auf.
+
+Status: **Verhalten ist korrekt (lieber ehrlich „nicht gefunden" als halluzinieren).**
+Bewusst nicht angepasst — bei realistischen Datenmengen ist das kaum relevant. Falls
+es sich später mit echten Daten zeigt, wäre ein leicht niedrigerer Threshold (~0.25)
+oder feineres Chunking denkbar; aktuell **nicht eingeplant**, nur hier festgehalten.
+
+**Datenablage ohne Docker.**
+Lokal (ohne Docker) liegen Uploads, ChromaDB und Audit-Log persistent unter
+`backend/data/` (nicht `/tmp` — das wäre flüchtig). Im Docker-Betrieb überschreiben
+Compose/Dockerfile die Pfade auf `/data/*` (gemountete named Volumes). Beide Wege
+sind in `backend/.env.example` und `README.md` dokumentiert; das System ist damit
+**auch ohne Docker exportierbar und lauffähig**.
+
+---
+
 ## Was als nächstes käme (v2)
 
 1. **Hybrid Search** — BM25 (Keyword) + Vektorsuche kombinieren → bessere Treffer

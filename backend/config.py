@@ -14,6 +14,10 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 APP_VERSION = "0.1.0"
 
+# Basisordner des Backends (backend/). Daran werden die lokalen Daten-Pfade
+# verankert, damit sie unabhängig vom Arbeitsverzeichnis stimmen.
+_BASE_DIR = Path(__file__).resolve().parent
+
 
 class Settings(BaseSettings):
     """Anwendungs-Konfiguration, geladen aus Umgebungsvariablen / .env."""
@@ -48,9 +52,15 @@ class Settings(BaseSettings):
     chunk_overlap_percent: float = Field(0.15, ge=0.0, le=0.5)
 
     # --- Persistenz-Pfade ---
-    upload_dir: Path = Path("/tmp/uploads")
-    chroma_path: Path = Path("/tmp/chroma")
-    audit_log_path: Path = Path("/tmp/audit.jsonl")
+    # Defaults für den LOKALEN Betrieb (ohne Docker): persistent unter
+    # backend/data/ — NICHT /tmp (das wäre flüchtig und würde beim Reboot
+    # gelöscht). Im Docker-Betrieb überschreiben docker-compose.yml und das
+    # Dockerfile diese Werte auf /data/* (gemountete named Volumes).
+    # Alle drei sind per Env (UPLOAD_DIR / CHROMA_PATH / AUDIT_LOG_PATH)
+    # bzw. .env überschreibbar.
+    upload_dir: Path = _BASE_DIR / "data" / "uploads"
+    chroma_path: Path = _BASE_DIR / "data" / "chroma"
+    audit_log_path: Path = _BASE_DIR / "data" / "audit.jsonl"
 
     # --- CORS ---
     cors_origins: list[str] = ["http://localhost:3000"]
