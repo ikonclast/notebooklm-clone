@@ -675,6 +675,119 @@ docker compose up
 
 ---
 
+## Folge-Iteration — Blöcke 16–19
+
+> Geplant, noch nicht umgesetzt. Reihenfolge wie unten; jeder Block einzeln:
+> umsetzen → Test → Commit, erst dann der nächste. Grundsatz wie gehabt: keine
+> Over-Engineering, reine Funktionen testen, alles bleibt auch ohne Docker lauffähig.
+
+### Block 16 — Unit-Tests (chunker, parser, confidence threshold)
+
+**Was:** Echte Unit-Tests mit pytest. Reine Funktionen, echte Asserts, kein
+Mock-Overkill. Drei klar abgegrenzte Bereiche:
+
+- **chunker** (`chunk_document`) — reine Funktion, kein Setup:
+  - Absatzgrenzen werden respektiert (`\n\n`)
+  - Overlap vorhanden: Ende von Chunk N taucht am Anfang von N+1 auf
+  - Metadaten korrekt: `page`, `chunk_index` (0,1,2…), `char_start < char_end`
+  - Randfälle: leerer Text → keine Chunks; sehr kurzer Text → genau 1 Chunk
+- **parser**:
+  - `parse_txt` voll abgedeckt (Temp-Datei): Text korrekt, `page == 1`, leere Datei
+  - `parse_pdf` minimal: eine zur Laufzeit mit PyMuPDF erzeugte 2-Seiten-PDF →
+    Seitenzahlen stimmen; korrupte/keine-PDF → `ParseError`
+- **confidence threshold** — dafür eine winzige reine Funktion extrahieren
+  (kleines Refactoring, s. Dateien), dann Grenzfälle testen:
+  - bester Score über / genau auf / unter Schwelle
+  - leere Trefferliste → nicht grounded
+
+**Dateien:**
+```
+backend/requirements-dev.txt        — pytest (separat von Runtime-Deps)
+backend/services/grounding.py       — NEU: is_grounded(best_score, threshold) o. ä.
+                                      (Logik aus chat.py _event_stream herausgezogen)
+backend/routers/chat.py             — nutzt die neue reine Funktion
+backend/tests/__init__.py
+backend/tests/test_chunker.py
+backend/tests/test_parser.py
+backend/tests/test_grounding.py
+Makefile                            — `test`-Target ruft zusätzlich pytest auf
+```
+
+**Test:** `cd backend && pip install -r requirements-dev.txt && pytest -q` → grün.
+
+**Commit:** `test: unit tests for chunker, parser and grounding threshold`
+
+---
+
+### Block 17 — ARCHITECTURE.md: Streaming-Status korrigieren
+
+**Was:** In „Was als nächstes käme (v2)" steht Punkt 4 „Streaming — LLM-Antworten
+token-by-token streamen (UX)". Das ist längst umgesetzt (Entscheidung 9, SSE).
+Den v2-Punkt entfernen und an Entscheidung 9 sauber festhalten, dass Streaming
+**bewusst schon in v1** eingebaut wurde (keine offene Zukunftsaufgabe).
+
+**Dateien:** `ARCHITECTURE.md`
+
+**Test:** Doku-Review — Streaming erscheint nicht mehr unter „v2"; Entscheidung 9
+ist die eindeutige Referenz, der bewusste Vorzieh-Entscheid ist notiert.
+
+**Commit:** `docs: streaming already shipped in v1 (decision 9), not a v2 item`
+
+---
+
+### Block 18 — Backend: Originaldatei ausliefern + document_id in Source
+
+**Was:**
+- `GET /documents/{doc_id}/file` → liefert die gespeicherte Originaldatei
+  (`FileResponse`) mit korrektem `media_type` (`application/pdf` | `text/plain`)
+  und `Content-Disposition: inline` + Original-Dateiname. 404 bei unbekanntem /
+  gelöschtem Dokument. Pfad kommt aus dem In-Memory `_Job` (kein Path-Traversal,
+  `doc_id` ist eine UUID, Datei wird intern referenziert).
+- `Source`-Schema um `document_id` erweitern und in `chat.py` beim Bauen der
+  Sources setzen — der Chip braucht die ID, um die Datei-URL zu bilden.
+
+**Dateien:**
+```
+backend/routers/documents.py    — GET /documents/{doc_id}/file
+backend/models/schemas.py       — Source.document_id
+backend/routers/chat.py         — document_id in die Source übernehmen
+frontend/types/index.ts         — Source.document_id (Typ-Sync)
+```
+
+**Test:** `curl -i /api/documents/{id}/file` → 200 + richtiger Content-Type;
+nach DELETE → 404. Chat-`sources`-Event enthält `document_id`.
+
+**Commit:** `feat: serve original document file + expose document_id in sources`
+
+---
+
+### Block 19 — Frontend: Quellen-Chip öffnet das Original auf der richtigen Seite
+
+**Was:** Klick auf einen Quellen-Chip öffnet
+`${API_BASE}/documents/{document_id}/file#page={page}` in einem neuen Tab
+(`target="_blank"`, `rel="noopener"`). Kein Inline-Viewer, kein react-pdf — der
+PDF-Viewer des Browsers springt via `#page=N` auf die Seite. Bei TXT (page 1)
+öffnet einfach die Datei.
+
+**Offene UX-Entscheidung (vor Umsetzung klären):** Der Chip klappt aktuell beim
+Klick den Beleg-Ausschnitt auf. Künftig soll Klick = Original öffnen. Vorschlag:
+Chip wird der Link (öffnet Original); der Beleg-Ausschnitt bleibt über das
+Chevron-Icon im Chip auf-/zuklappbar. Alternativ Link nur auf den Dateinamen in
+der Excerpt-Karte. → bei Block 19 entscheiden.
+
+**Dateien:**
+```
+frontend/components/Chat.tsx    — SourceCitations / ExcerptCard: Link + #page
+frontend/lib/api.ts             — optional: fileUrl(documentId, page) Helper
+```
+
+**Test:** Playwright/manuell — Klick auf Chip öffnet neuen Tab mit
+`…/documents/{id}/file#page=N`; für PDF springt die Ansicht auf die Seite.
+
+**Commit:** `feat: source chips open the original document at the cited page`
+
+---
+
 ## Abgabe-Checkliste
 
 - [ ] GitHub Repo public — saubere History mit 15 Commits
