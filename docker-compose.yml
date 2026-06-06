@@ -1,0 +1,94 @@
+# NotebookLM Clone — vollständiger Stack mit einem Command:
+#
+#     docker compose up
+#
+# Default-Betrieb ist 100 % lokal (Ollama). Kein API-Key nötig, DSGVO-konform.
+# Cloud-Provider (Groq/OpenAI) sind opt-in via .env — siehe .env.example.
+
+services:
+  # Lokales LLM. Beim ersten Start lädt der ollama-pull-Container das Modell.
+  ollama:
+    image: ollama/ollama:latest
+    volumes:
+      - ollama_data:/root/.ollama
+    healthcheck:
+      # `ollama list` ist im Image garantiert vorhanden (curl ist es nicht).
+      test: ["CMD", "ollama", "list"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+    restart: unless-stopped
+
+  # Init-Container: zieht das Modell einmal, dann beendet er sich (restart: no).
+  # Das Modell bleibt im ollama_data-Volume — zweiter Start ohne Download.
+  ollama-pull:
+    image: ollama/ollama:latest
+    depends_on:
+      ollama:
+        condition: service_healthy
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+    entrypoint: ["ollama", "pull", "${OLLAMA_MODEL:-llama3.2:3b}"]
+    restart: "no"
+
+  backend:
+    build: ./backend
+    depends_on:
+      ollama-pull:
+        condition: service_completed_successfully
+    environment:
+      LLM_PROVIDER: ${LLM_PROVIDER:-ollama}
+      # Cloud-Provider (nur genutzt, wenn LLM_PROVIDER entsprechend gesetzt ist):
+      GROQ_API_KEY: ${GROQ_API_KEY:-}
+      GROQ_MODEL: ${GROQ_MODEL:-llama-3.3-70b-versatile}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
+      # Ollama (lokaler Default):
+      OLLAMA_BASE_URL: http://ollama:11434
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3.2:3b}
+      # Retrieval / Limits:
+      CONFIDENCE_THRESHOLD: ${CONFIDENCE_THRESHOLD:-0.3}
+      TOP_K: ${TOP_K:-5}
+      MAX_FILE_SIZE_MB: ${MAX_FILE_SIZE_MB:-20}
+      # Persistenz → named Volumes:
+      UPLOAD_DIR: /data/uploads
+      CHROMA_PATH: /data/chroma
+      AUDIT_LOG_PATH: /data/audit/audit.jsonl
+      # Browser spricht das Backend nur über den Same-Origin-Proxy des Frontends
+      # an (Next rewrites), daher ist hier kein zusätzliches CORS-Origin nötig.
+      CORS_ORIGINS: '["http://localhost:3000"]'
+    volumes:
+      - chroma_data:/data/chroma
+      - uploads_data:/data/uploads
+      - audit_data:/data/audit
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 20s
+    restart: unless-stopped
+
+  frontend:
+    build: ./frontend
+    depends_on:
+      backend:
+        condition: service_started
+    environment:
+      # Aus Sicht des Next-Servers (nicht des Browsers). Der Browser ruft /api/*.
+      BACKEND_URL: http://backend:8000
+    ports:
+      - "3000:3000"
+    restart: unless-stopped
+
+# Explizite Volume-Namen → stabil referenzierbar in `make backup` / `make restore`.
+volumes:
+  ollama_data:
+    name: notebooklm_ollama_data
+  chroma_data:
+    name: notebooklm_chroma_data
+  uploads_data:
+    name: notebooklm_uploads_data
+  audit_data:
+    name: notebooklm_audit_data

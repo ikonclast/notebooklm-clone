@@ -18,6 +18,9 @@ backend/uploads/
 node_modules/
 frontend/.next/
 
+# Backup-Snapshots (make backup)
+backup/
+
 # OS
 .DS_Store
 
