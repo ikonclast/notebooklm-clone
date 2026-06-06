@@ -1,0 +1,20 @@
+# Niemals ins Image: Secrets, lokale Daten, Build-Müll.
+.env
+.env.*
+!.env.example
+
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+
+# Lokale Persistenz (gehört in Volumes, nicht ins Image)
+chroma_db/
+uploads/
+*.jsonl
+
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.DS_Store
