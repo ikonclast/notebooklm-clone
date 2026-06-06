@@ -417,6 +417,34 @@ RUN python -c "from sentence_transformers import SentenceTransformer; \
 
 ---
 
+## Entscheidung 16: /api-Proxy als Runtime-Route-Handler statt next.config-Rewrite
+
+Das Frontend spricht das Backend über einen Same-Origin-Proxy `/api/*` an. Naheliegend
+wäre ein `rewrites()` in `next.config.mjs` — **funktioniert mit `output: standalone`
+aber nicht:** das Rewrite-Ziel wird zur **Build-Zeit** ins Routes-Manifest eingebacken.
+Beim `docker build` ist `BACKEND_URL` noch nicht gesetzt, also fror `localhost:8000`
+ein und der Container proxyte ins Leere (`ECONNREFUSED`).
+
+Lösung: ein Catch-all Route Handler (`app/api/[...path]/route.ts`), der `BACKEND_URL`
+bei **jedem Request** liest und den Response-Body streamt (für das SSE-Chat-Streaming).
+So ist die Backend-Adresse eine echte Laufzeit-Konfiguration — lokal `localhost:8000`,
+in Compose `http://backend:8000`.
+
+---
+
+## Entscheidung 17: Live-Provider-Wahl & inhaltsbasierte Fragen-Vorschläge
+
+- **Provider-Umschaltung zur Laufzeit:** `ChatRequest.provider` überschreibt pro
+  Anfrage den Server-Default; `GET /providers` meldet, welche Provider nutzbar sind
+  (Cloud-Key gesetzt bzw. Ollama erreichbar). Das Frontend zeigt nur verfügbare
+  Optionen aktiv an — kein Neustart nötig, um das Modell zu wechseln.
+- **Vorschläge aus dem Inhalt:** `POST /suggestions` lässt das gewählte LLM aus einem
+  Ausschnitt der gewählten Dokumente konkrete Einstiegsfragen generieren — statt
+  generischer Platzhalter. Schlägt die Generierung fehl, bleibt die Liste leer (die
+  UI degradiert sauber, statt zu brechen). Ohne gewählte Quellen: keine Vorschläge.
+
+---
+
 ## Was als nächstes käme (v2)
 
 1. **Hybrid Search** — BM25 (Keyword) + Vektorsuche kombinieren → bessere Treffer

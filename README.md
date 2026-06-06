@@ -46,10 +46,14 @@ Jeder weitere Start ist sofort bereit (kein erneuter Download).
 1. **Quelle hochladen** — PDF oder TXT per Drag & Drop in die Seitenleiste
    (max. 20 MB). Der Verarbeitungsfortschritt (parsen → chunking → embedding →
    speichern) wird live angezeigt.
-2. **Quellen auswählen** — fertige Dokumente ankreuzen.
-3. **Fragen stellen** — die Antwort streamt Wort für Wort, Belege erscheinen als
+2. **Quellen auswählen** — fertige Dokumente ankreuzen. Sind welche gewählt,
+   schlägt die App **aus dem Inhalt generierte** Einstiegsfragen vor (keine
+   generischen Platzhalter — ohne Quellen gibt es keine Vorschläge).
+3. **Modell wählen** — oben rechts live zwischen **Ollama (lokal)**, **Groq** und
+   **OpenAI** umschalten. Nicht konfigurierte Provider sind ausgegraut.
+4. **Fragen stellen** — die Antwort streamt Wort für Wort, Belege erscheinen als
    anklickbare Quellen-Chips mit Originaltextstelle, Seitenzahl und Score.
-4. **Löschen** — entfernt das Dokument hart (Datei + Embeddings + Audit-Eintrag),
+5. **Löschen** — entfernt das Dokument hart (Datei + Embeddings + Audit-Eintrag),
    Recht auf Löschung nach Art. 17 DSGVO.
 
 ---
@@ -82,17 +86,24 @@ Vollständige Begründungen aller Entscheidungen: **[ARCHITECTURE.md](ARCHITECTU
 
 ## LLM-Provider wechseln
 
-Default ist `ollama` (lokal). Cloud-Provider sind opt-in via `.env`:
+Zwei Ebenen:
+
+- **Live im UI** — der Umschalter oben rechts wählt pro Anfrage zwischen Ollama,
+  Groq und OpenAI. `GET /providers` meldet, welche Provider nutzbar sind (Key
+  gesetzt bzw. Ollama erreichbar); nur die werden anklickbar.
+- **Default & Keys** — der Server-Default und die API-Keys kommen aus `.env`:
 
 ```bash
 # .env
-LLM_PROVIDER=groq
-GROQ_API_KEY=gsk_...
+LLM_PROVIDER=ollama      # Vorauswahl im UI
+GROQ_API_KEY=gsk_...     # macht Groq im Umschalter verfügbar
+OPENAI_API_KEY=sk-...    # macht OpenAI verfügbar
 ```
 
 > **DSGVO-Hinweis:** Bei `groq` oder `openai` wird der Dokumenteninhalt auf
 > US-Servern verarbeitet — ein Auftragsverarbeitungsvertrag (AVV) ist
-> erforderlich. `ollama` verarbeitet alles lokal.
+> erforderlich. `ollama` verarbeitet alles lokal. Der Umschalter weist im Menü
+> darauf hin.
 
 ---
 
