@@ -248,6 +248,11 @@ data: {}
 **Warum SSE statt WebSocket:** SSE ist unidirektional (Server → Client), einfacher,
 kein Handshake-Overhead. Für diesen Use Case ausreichend und die richtige Wahl.
 
+**Bewusst schon in v1:** Streaming ist kein „später"-Thema — es prägt die wahrgenommene
+Reaktionszeit so stark, dass wir es von Anfang an eingebaut haben. Es steht daher
+**nicht** auf der v2-Liste; Frontend (`useChat` + `fetch`/ReadableStream) und Backend
+(`StreamingResponse`) sind durchgängig auf diesen Stream-Pfad ausgelegt.
+
 ---
 
 ## Entscheidung 10: Pydantic Settings für Konfiguration
@@ -477,5 +482,7 @@ sind in `backend/.env.example` und `README.md` dokumentiert; das System ist dami
 1. **Hybrid Search** — BM25 (Keyword) + Vektorsuche kombinieren → bessere Treffer
 2. **Mehrere Notebooks** — Datenmodell bereits vorbereitet (document_id mit notebook_id verknüpfen)
 3. **Reranking** — Cross-Encoder nach initialem Retrieval für höhere Präzision
-4. **Streaming** — LLM-Antworten token-by-token streamen (UX)
-5. **OCR** — Gescannte PDFs via Tesseract/pymupdf unterstützen
+4. **OCR** — Gescannte PDFs via Tesseract/pymupdf unterstützen
+
+> _Streaming stand hier ursprünglich als Punkt — ist aber bereits in v1 umgesetzt
+> (Entscheidung 9) und daher entfernt._
