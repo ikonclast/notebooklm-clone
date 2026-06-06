@@ -36,6 +36,22 @@ export interface UploadResponse {
   status: DocumentStatus;
 }
 
+// ── LLM-Provider (Live-Umschaltung) ─────────────────────────────────────────
+export type ProviderId = "ollama" | "groq" | "openai";
+
+export interface ProviderInfo {
+  id: ProviderId;
+  label: string;
+  model: string;
+  available: boolean;
+}
+
+// GET /providers
+export interface ProvidersResponse {
+  default: ProviderId;
+  providers: ProviderInfo[];
+}
+
 // ── Chat-UI-Modell (Frontend-intern) ────────────────────────────────────────
 export type MessageRole = "user" | "assistant" | "error";
 

@@ -3,20 +3,22 @@
 import { useCallback, useRef, useState } from "react";
 
 import { streamChat } from "@/lib/api";
-import type { ChatMessage } from "@/types";
+import type { ChatMessage, ProviderId } from "@/types";
 
 let _mid = 0;
 const nextId = () => `m${++_mid}`;
 
-export function useChat(selectedReadyIds: string[]) {
+export function useChat(selectedReadyIds: string[], provider: ProviderId | null) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [streaming, setStreaming] = useState(false);
   const ctrl = useRef<AbortController | null>(null);
 
-  // Aktuelle Auswahl per Ref → runQuery bleibt eine stabile Funktion.
+  // Aktuelle Auswahl/Provider per Ref → runQuery bleibt eine stabile Funktion.
   const idsRef = useRef(selectedReadyIds);
   idsRef.current = selectedReadyIds;
+  const providerRef = useRef(provider);
+  providerRef.current = provider;
 
   const runQuery = useCallback((rawQuery: string) => {
     const query = rawQuery.trim();
@@ -46,6 +48,7 @@ export function useChat(selectedReadyIds: string[]) {
     void streamChat(
       query,
       ids,
+      providerRef.current,
       {
         onSources: (sources) => patch((x) => ({ ...x, sources })),
         onToken: (text) => patch((x) => ({ ...x, text: x.text + text })),

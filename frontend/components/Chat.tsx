@@ -12,8 +12,8 @@ import {
   IconSend,
   IconStop,
   Logo,
+  Spinner,
 } from "@/components/icons";
-import { EXAMPLE_QUESTIONS } from "@/lib/labels";
 import type { ChatMessage, Source } from "@/types";
 
 // **fett** innerhalb des Antworttexts rendern
@@ -223,9 +223,13 @@ export function ErrorMessage({ text, onRetry }: { text: string; onRetry: () => v
 export function EmptyChat({
   onAsk,
   disabled,
+  suggestions,
+  loadingSuggestions,
 }: {
   onAsk: (q: string) => void;
   disabled: boolean;
+  suggestions: string[];
+  loadingSuggestions: boolean;
 }) {
   return (
     <div className="h-full flex flex-col items-center justify-center px-6 py-10 text-center">
@@ -240,22 +244,38 @@ export function EmptyChat({
         Die KI antwortet nur aus deinen hochgeladenen Dokumenten und zeigt zu jeder Aussage die
         Fundstelle. Findet sie nichts, sagt sie es ehrlich.
       </p>
-      <div className="flex flex-col gap-2 w-full max-w-md mx-auto">
-        {EXAMPLE_QUESTIONS.map((q, i) => (
-          <button
-            key={i}
-            disabled={disabled}
-            onClick={() => onAsk(q)}
-            className="group flex items-center justify-between gap-3 text-left rounded-xl border border-zinc-200 dark:border-zinc-700/80 bg-white dark:bg-zinc-800/40 px-4 py-3 text-[14px] text-zinc-700 dark:text-zinc-200 hover:border-accent-300 dark:hover:border-accent-500/40 hover:bg-accent-50/50 dark:hover:bg-accent-600/10 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-          >
-            <span>{q}</span>
-            <IconChevron className="w-4 h-4 -rotate-90 text-zinc-300 dark:text-zinc-600 group-hover:text-accent-500 transition-colors" />
-          </button>
-        ))}
-      </div>
-      {disabled && (
-        <p className="mt-6 text-[12.5px] text-amber-600 dark:text-amber-400/90">
+
+      {/* Vorschläge nur, wenn bereite Quellen gewählt sind — sonst Hinweis. */}
+      {disabled ? (
+        <p className="text-[12.5px] text-amber-600 dark:text-amber-400/90">
           Wähle zuerst mindestens eine bereite Quelle in der Seitenleiste aus.
+        </p>
+      ) : loadingSuggestions ? (
+        <div className="flex items-center gap-2 text-[13px] text-zinc-400 dark:text-zinc-500">
+          <Spinner className="w-4 h-4" />
+          Passende Fragen werden aus deinen Quellen vorbereitet…
+        </div>
+      ) : suggestions.length > 0 ? (
+        <div className="w-full max-w-md mx-auto">
+          <p className="text-[11px] font-medium uppercase tracking-wider text-zinc-400 dark:text-zinc-500 mb-2.5">
+            Aus deinen Quellen
+          </p>
+          <div className="flex flex-col gap-2">
+            {suggestions.map((q, i) => (
+              <button
+                key={i}
+                onClick={() => onAsk(q)}
+                className="group flex items-center justify-between gap-3 text-left rounded-xl border border-zinc-200 dark:border-zinc-700/80 bg-white dark:bg-zinc-800/40 px-4 py-3 text-[14px] text-zinc-700 dark:text-zinc-200 hover:border-accent-300 dark:hover:border-accent-500/40 hover:bg-accent-50/50 dark:hover:bg-accent-600/10 transition-all"
+              >
+                <span>{q}</span>
+                <IconChevron className="w-4 h-4 -rotate-90 text-zinc-300 dark:text-zinc-600 group-hover:text-accent-500 transition-colors" />
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : (
+        <p className="text-[13px] text-zinc-400 dark:text-zinc-500">
+          Stelle eine Frage zu deinen ausgewählten Quellen.
         </p>
       )}
     </div>

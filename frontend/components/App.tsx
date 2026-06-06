@@ -14,6 +14,8 @@ import { Sidebar } from "@/components/Sidebar";
 import { Toasts } from "@/components/Toasts";
 import { useChat } from "@/hooks/useChat";
 import { useDocuments } from "@/hooks/useDocuments";
+import { useProviders } from "@/hooks/useProviders";
+import { useSuggestions } from "@/hooks/useSuggestions";
 import { useTheme } from "@/hooks/useTheme";
 import { useToasts } from "@/hooks/useToasts";
 
@@ -23,6 +25,7 @@ export function App() {
   const { docs, uploadFiles, remove } = useDocuments({
     onError: (title, body) => toast("error", title, body),
   });
+  const { providers, selected: provider, setSelected: setProvider } = useProviders();
 
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [drawer, setDrawer] = useState(false);
@@ -38,7 +41,14 @@ export function App() {
   const readyCount = docs.filter((d) => d.status === "ready").length;
 
   const { messages, input, setInput, streaming, runQuery, stop, retry } =
-    useChat(selectedReady);
+    useChat(selectedReady, provider);
+
+  // Datengetriebene Vorschläge: nur bei leerem Chat und gewählten Quellen.
+  const { questions: suggestions, loading: loadingSuggestions } = useSuggestions(
+    selectedReady,
+    provider,
+    messages.length === 0,
+  );
 
   const composerDisabled = selectedReady.length === 0;
   const composerHint = composerDisabled
@@ -76,7 +86,14 @@ export function App() {
 
   return (
     <div className="h-full flex flex-col">
-      <Header dark={dark} onToggleDark={toggle} onMenu={() => setDrawer(true)} />
+      <Header
+        dark={dark}
+        onToggleDark={toggle}
+        onMenu={() => setDrawer(true)}
+        providers={providers}
+        selectedProvider={provider}
+        onSelectProvider={setProvider}
+      />
 
       <div className="flex-1 flex min-h-0">
         <div className="hidden md:block w-[304px] shrink-0">{sidebar()}</div>
@@ -84,7 +101,12 @@ export function App() {
         <main className="flex-1 min-w-0 flex flex-col bg-white dark:bg-zinc-900">
           <div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto">
             {messages.length === 0 ? (
-              <EmptyChat onAsk={runQuery} disabled={composerDisabled} />
+              <EmptyChat
+                onAsk={runQuery}
+                disabled={composerDisabled}
+                suggestions={suggestions}
+                loadingSuggestions={loadingSuggestions}
+              />
             ) : (
               <div className="max-w-3xl mx-auto px-4 sm:px-6 py-7 space-y-7">
                 {messages.map((m) =>

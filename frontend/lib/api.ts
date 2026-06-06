@@ -3,6 +3,8 @@
 import type {
   ChatStreamEvent,
   JobStatus,
+  ProviderId,
+  ProvidersResponse,
   Source,
   UploadResponse,
 } from "@/types";
@@ -67,6 +69,27 @@ export async function deleteDocument(documentId: string): Promise<void> {
   }
 }
 
+export async function getProviders(): Promise<ProvidersResponse> {
+  const res = await fetch(`${API_BASE}/providers`, { cache: "no-store" });
+  if (!res.ok) throw new ApiError(res.status, "Modelle konnten nicht geladen werden.");
+  return (await res.json()) as ProvidersResponse;
+}
+
+export async function getSuggestions(
+  documentIds: string[],
+  provider: ProviderId | null,
+  signal?: AbortSignal,
+): Promise<string[]> {
+  const res = await fetch(`${API_BASE}/suggestions`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ document_ids: documentIds, provider }),
+    signal,
+  });
+  if (!res.ok) throw new ApiError(res.status, "Vorschläge konnten nicht geladen werden.");
+  return ((await res.json()) as { questions: string[] }).questions;
+}
+
 export interface ChatHandlers {
   onSources?: (sources: Source[]) => void;
   onToken?: (text: string) => void;
@@ -81,6 +104,7 @@ export interface ChatHandlers {
 export async function streamChat(
   query: string,
   documentIds: string[],
+  provider: ProviderId | null,
   handlers: ChatHandlers,
   signal?: AbortSignal,
 ): Promise<void> {
@@ -89,7 +113,7 @@ export async function streamChat(
     res = await fetch(`${API_BASE}/chat`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ query, document_ids: documentIds }),
+      body: JSON.stringify({ query, document_ids: documentIds, provider }),
       signal,
     });
   } catch (err) {
