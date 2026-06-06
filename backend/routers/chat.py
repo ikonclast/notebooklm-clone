@@ -24,6 +24,7 @@ from audit import write_audit_event
 from config import get_settings
 from models.schemas import ChatRequest, ChunkResult, Source
 from services.embedder import get_embedder
+from services.grounding import is_grounded, top_score
 from services.llm import get_llm_provider
 from services.vectorstore import get_vector_store
 
@@ -77,8 +78,8 @@ async def _event_stream(req: ChatRequest) -> AsyncIterator[str]:
         get_vector_store().search, query_vec, settings.top_k, req.document_ids
     )
 
-    best_score = results[0].score if results else 0.0
-    grounded = bool(results) and best_score >= settings.confidence_threshold
+    best = top_score(results)
+    grounded = is_grounded(results, settings.confidence_threshold)
 
     write_audit_event(
         "chat.queried",
@@ -92,7 +93,7 @@ async def _event_stream(req: ChatRequest) -> AsyncIterator[str]:
             "query_id": query_id,
             "document_ids": req.document_ids,
             "results": len(results),
-            "best_score": round(best_score, 4),
+            "best_score": round(best, 4),
             "grounded": grounded,
         },
     )

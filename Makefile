@@ -51,9 +51,9 @@ dev: ## Backend + Frontend lokal parallel
 	 wait
 
 # ── Qualität ────────────────────────────────────────────────────────────────
-test: ## TypeScript-Check + Backend-Import-Smoke-Test
+test: ## TypeScript-Check + Backend-Unit-Tests (pytest)
 	cd frontend && npm run typecheck
-	cd backend && python -c "import main; print('backend import OK')"
+	cd backend && python3 -m pytest -q
 
 lint: ## ruff (Python) + eslint (TS) — überspringt fehlende Tools
 	@command -v ruff >/dev/null 2>&1 && ruff check backend || echo "ruff nicht installiert — übersprungen"
