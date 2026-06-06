@@ -2,15 +2,13 @@
 
 ## Vor Abgabe
 
-- [ ] **Export ohne Docker verifizieren.**
-  Das System **muss exportierbar und ohne Docker lauffähig** sein. In der
-  Abgabe-Vorbereitung einmal sauber durchspielen:
-  - Backend: `cd backend && pip install -r requirements.txt && uvicorn main:app`
-    (Daten landen persistent in `backend/data/`, nicht `/tmp`).
-  - Frontend: `cd frontend && npm install && npm run dev`.
-  - Voller Flow ohne Container: Upload → Vorschläge → Chat → Quellen → Löschen.
-  - Prüfen, dass `make dev` beides startet und der `/api`-Proxy lokal greift
-    (BACKEND_URL Default `http://localhost:8000`).
+- [x] **Export ohne Docker verifiziert** (2026-06-06).
+  Backend im venv (`pip install torch --index-url …/cpu` + `requirements.txt`,
+  `uvicorn`), Frontend `npm run dev`. Voller Flow grün: Upload → Vorschläge →
+  Chat (groq) → Quellen-Link → Löschen. `pytest` 17/17 im venv (Python 3.13).
+  Daten persistent in `backend/data/`, lokaler `/api`-Proxy greift
+  (BACKEND_URL Default `http://localhost:8000`). README-Lokalsetup ergänzt
+  (CPU-torch + Modell-Download zur Laufzeit).
 
 ## Daueranforderung (bei jeder Änderung beachten)
 

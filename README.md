@@ -52,7 +52,9 @@ Jeder weitere Start ist sofort bereit (kein erneuter Download).
 3. **Modell wählen** — oben rechts live zwischen **Ollama (lokal)**, **Groq** und
    **OpenAI** umschalten. Nicht konfigurierte Provider sind ausgegraut.
 4. **Fragen stellen** — die Antwort streamt Wort für Wort, Belege erscheinen als
-   anklickbare Quellen-Chips mit Originaltextstelle, Seitenzahl und Score.
+   anklickbare Quellen-Chips mit Originaltextstelle, Seitenzahl und Score. Über
+   den aufgeklappten Beleg öffnet ein Klick das **Originaldokument im neuen Tab,
+   direkt auf der zitierten Seite**.
 5. **Löschen** — entfernt das Dokument hart (Datei + Embeddings + Audit-Eintrag),
    Recht auf Löschung nach Art. 17 DSGVO.
 
@@ -123,15 +125,25 @@ make clean                               # Stack + ALLE Daten löschen
 ## Lokale Entwicklung (ohne Docker)
 
 ```bash
-# Backend
-cd backend && pip install -r requirements.txt && uvicorn main:app --reload
+# Backend (venv empfohlen)
+cd backend
+python3 -m venv .venv && source .venv/bin/activate
+# CPU-only torch zuerst — sonst zieht pip auf CPU-Maschinen ~4 GB CUDA-Pakete:
+pip install torch --index-url https://download.pytorch.org/whl/cpu
+pip install -r requirements.txt
+uvicorn main:app --reload            # → http://localhost:8000
 
 # Frontend (zweites Terminal)
-cd frontend && npm install && npm run dev
+cd frontend && npm install && npm run dev    # → http://localhost:3000
 ```
 
-Oder beides parallel: `make dev`. Qualität: `make test` (TypeScript-Check +
-Backend-Smoke), `make lint` (ruff + eslint).
+Oder beides parallel: `make dev`. Tests/Qualität: `make test`
+(TypeScript-Check + `pytest`), `make lint` (ruff + eslint). Für die Tests vorab
+`pip install -r backend/requirements-dev.txt`.
+
+> **Erststart:** Ohne Docker lädt das Embedding-Modell `all-MiniLM-L6-v2`
+> (~90 MB) beim ersten Upload einmalig von Hugging Face nach `~/.cache`
+> (im Docker-Image ist es vorgebacken). Danach läuft alles offline.
 
 **Datenablage ohne Docker:** Uploads, Vektor-DB und Audit-Log liegen persistent
 unter `backend/data/` (gitignored) — bewusst **nicht** `/tmp`, das beim Reboot

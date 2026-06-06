@@ -450,6 +450,17 @@ in Compose `http://backend:8000`.
 
 ---
 
+## Entscheidung 18: Originaldatei-Zugriff über die Quellenangabe
+
+Eine Quellenangabe soll nachprüfbar sein. `GET /documents/{id}/file` liefert die
+gespeicherte Originaldatei **inline** aus; im Frontend verlinkt der aufgeklappte
+Beleg auf `…/file#page=N`. Bewusst **kein** eingebetteter Viewer und kein react-pdf:
+der Browser bringt für PDF bereits einen Viewer mit, der `#page=N` versteht — die
+Datei servern und verlinken genügt. `Source` trägt dafür die `document_id`.
+Minimaler Code, keine zusätzliche Abhängigkeit.
+
+---
+
 ## Bekannte Grenzen (offen, bewusst dokumentiert)
 
 **Confidence-Threshold vs. Paraphrasen bei kleinen Dokumenten.**

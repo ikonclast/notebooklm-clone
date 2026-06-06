@@ -790,7 +790,7 @@ frontend/lib/api.ts             — optional: fileUrl(documentId, page) Helper
 
 ## Abgabe-Checkliste
 
-- [ ] GitHub Repo public — saubere History mit 15 Commits
+- [ ] GitHub Repo public — saubere, konventionelle Commit-History
 - [ ] Loom-Video aufgenommen und verlinkt
 - [ ] README: `docker compose up` → es funktioniert
 - [ ] ARCHITECTURE.md vollständig
