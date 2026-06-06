@@ -235,6 +235,8 @@ interface SidebarProps {
   docs: JobStatus[];
   selectedIds: string[];
   onToggleSelect: (id: string) => void;
+  onSelectAll: () => void;
+  onDeselectAll: () => void;
   onDelete: (id: string) => void;
   onFiles: (files: FileList) => void;
   onClose?: () => void;
@@ -245,12 +247,15 @@ export function Sidebar({
   docs,
   selectedIds,
   onToggleSelect,
+  onSelectAll,
+  onDeselectAll,
   onDelete,
   onFiles,
   onClose,
   isMobile,
 }: SidebarProps) {
   const readyCount = docs.filter((d) => d.status === "ready").length;
+  const allReadySelected = readyCount > 0 && selectedIds.length >= readyCount;
   return (
     <aside className="h-full flex flex-col bg-white dark:bg-zinc-900 border-r border-zinc-200/80 dark:border-zinc-800">
       <div className="flex items-center justify-between px-4 pt-4 pb-1">
@@ -294,16 +299,26 @@ export function Sidebar({
       )}
 
       {docs.length > 0 && (
-        <div className="px-4 py-2.5 border-t border-zinc-200/80 dark:border-zinc-800 text-[11.5px] text-zinc-400 dark:text-zinc-500">
+        <div className="px-4 py-2.5 border-t border-zinc-200/80 dark:border-zinc-800 flex items-center justify-between gap-2 text-[11.5px] text-zinc-400 dark:text-zinc-500">
+          {readyCount > 0 ? (
+            <button
+              onClick={allReadySelected ? onDeselectAll : onSelectAll}
+              className="font-medium text-accent-600 dark:text-accent-400 hover:underline shrink-0"
+            >
+              {allReadySelected ? "Alle abwählen" : "Alle auswählen"}
+            </button>
+          ) : (
+            <span />
+          )}
           {selectedIds.length > 0 ? (
-            <span>
+            <span className="truncate">
               <span className="font-medium text-zinc-600 dark:text-zinc-300">
                 {selectedIds.length}
               </span>{" "}
               von {readyCount} ausgewählt
             </span>
           ) : (
-            <span>Wähle Quellen für den Chat aus</span>
+            <span className="truncate">Wähle Quellen für den Chat aus</span>
           )}
         </div>
       )}

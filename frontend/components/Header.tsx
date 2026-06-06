@@ -6,6 +6,7 @@ interface HeaderProps {
   dark: boolean;
   onToggleDark: () => void;
   onMenu: () => void;
+  onReset: () => void;
   providers: ProviderInfo[];
   selectedProvider: ProviderId | null;
   onSelectProvider: (id: ProviderId) => void;
@@ -15,6 +16,7 @@ export function Header({
   dark,
   onToggleDark,
   onMenu,
+  onReset,
   providers,
   selectedProvider,
   onSelectProvider,
@@ -29,10 +31,17 @@ export function Header({
         >
           <IconMenu className="w-5 h-5" />
         </button>
-        <Logo className="w-6 h-6" />
-        <span className="text-[15px] font-semibold tracking-tight text-zinc-800 dark:text-zinc-100">
-          NotebookLM <span className="font-normal text-zinc-400 dark:text-zinc-500">Clone</span>
-        </span>
+        <button
+          onClick={onReset}
+          aria-label="Zum Start — neuer Chat"
+          title="Zum Start"
+          className="flex items-center gap-2.5 rounded-lg -ml-1 px-1 py-0.5 hover:opacity-80 transition-opacity"
+        >
+          <Logo className="w-6 h-6" />
+          <span className="text-[15px] font-semibold tracking-tight text-zinc-800 dark:text-zinc-100">
+            NotebookLM <span className="font-normal text-zinc-400 dark:text-zinc-500">Clone</span>
+          </span>
+        </button>
       </div>
       <div className="flex items-center gap-1.5">
         <ProviderSwitcher

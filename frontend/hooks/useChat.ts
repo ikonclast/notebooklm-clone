@@ -92,5 +92,13 @@ export function useChat(selectedReadyIds: string[], provider: ProviderId | null)
     [runQuery],
   );
 
-  return { messages, input, setInput, streaming, runQuery, stop, retry };
+  // Zurück zum Start: laufenden Stream abbrechen, Verlauf und Eingabe leeren.
+  const reset = useCallback(() => {
+    ctrl.current?.abort();
+    setMessages([]);
+    setInput("");
+    setStreaming(false);
+  }, []);
+
+  return { messages, input, setInput, streaming, runQuery, stop, retry, reset };
 }

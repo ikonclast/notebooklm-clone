@@ -40,8 +40,19 @@ export function App() {
   );
   const readyCount = docs.filter((d) => d.status === "ready").length;
 
-  const { messages, input, setInput, streaming, runQuery, stop, retry } =
+  const { messages, input, setInput, streaming, runQuery, stop, retry, reset } =
     useChat(selectedReady, provider);
+
+  const readyIds = useMemo(
+    () => docs.filter((d) => d.status === "ready").map((d) => d.document_id),
+    [docs],
+  );
+
+  // Logo → Start-Status: Verlauf leeren und Auswahl zurücksetzen.
+  const onResetToStart = () => {
+    reset();
+    setSelectedIds([]);
+  };
 
   // Datengetriebene Vorschläge: nur bei leerem Chat und gewählten Quellen.
   const { questions: suggestions, loading: loadingSuggestions } = useSuggestions(
@@ -77,6 +88,8 @@ export function App() {
       docs={docs}
       selectedIds={selectedIds}
       onToggleSelect={onToggleSelect}
+      onSelectAll={() => setSelectedIds(readyIds)}
+      onDeselectAll={() => setSelectedIds([])}
       onDelete={onDelete}
       onFiles={uploadFiles}
       isMobile={isMobile}
@@ -90,6 +103,7 @@ export function App() {
         dark={dark}
         onToggleDark={toggle}
         onMenu={() => setDrawer(true)}
+        onReset={onResetToStart}
         providers={providers}
         selectedProvider={provider}
         onSelectProvider={setProvider}
