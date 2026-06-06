@@ -280,6 +280,20 @@ export function Sidebar({
 
       <UploadZone onFiles={onFiles} />
 
+      {/* Alle auswählen/abwählen — direkt unter dem Upload, immer sichtbar
+          (scrollt nicht mit der Quellenliste weg). */}
+      {readyCount > 0 && (
+        <div className="px-3 pt-2.5">
+          <button
+            onClick={allReadySelected ? onDeselectAll : onSelectAll}
+            className="w-full flex items-center justify-center gap-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800/60 px-3 py-2 text-[12.5px] font-medium text-zinc-600 dark:text-zinc-300 hover:border-accent-300 dark:hover:border-accent-500/40 hover:text-accent-700 dark:hover:text-accent-300 hover:bg-accent-50/50 dark:hover:bg-accent-600/10 transition-colors"
+          >
+            <IconCheck className="w-3.5 h-3.5" />
+            {allReadySelected ? "Alle abwählen" : "Alle auswählen"}
+          </button>
+        </div>
+      )}
+
       {docs.length > 0 ? (
         <ul className="flex-1 overflow-y-auto px-2 py-2 space-y-0.5 min-h-0">
           {docs.map((d) => (
@@ -299,26 +313,16 @@ export function Sidebar({
       )}
 
       {docs.length > 0 && (
-        <div className="px-4 py-2.5 border-t border-zinc-200/80 dark:border-zinc-800 flex items-center justify-between gap-2 text-[11.5px] text-zinc-400 dark:text-zinc-500">
-          {readyCount > 0 ? (
-            <button
-              onClick={allReadySelected ? onDeselectAll : onSelectAll}
-              className="font-medium text-accent-600 dark:text-accent-400 hover:underline shrink-0"
-            >
-              {allReadySelected ? "Alle abwählen" : "Alle auswählen"}
-            </button>
-          ) : (
-            <span />
-          )}
+        <div className="px-4 py-2.5 border-t border-zinc-200/80 dark:border-zinc-800 text-[11.5px] text-zinc-400 dark:text-zinc-500">
           {selectedIds.length > 0 ? (
-            <span className="truncate">
+            <span>
               <span className="font-medium text-zinc-600 dark:text-zinc-300">
                 {selectedIds.length}
               </span>{" "}
               von {readyCount} ausgewählt
             </span>
           ) : (
-            <span className="truncate">Wähle Quellen für den Chat aus</span>
+            <span>Wähle Quellen für den Chat aus</span>
           )}
         </div>
       )}
