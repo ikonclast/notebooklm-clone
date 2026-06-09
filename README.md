@@ -15,10 +15,12 @@ Cloud-Dienst, kein Byte verlässt die Infrastruktur — DSGVO-konform out of the
 Einzige Voraussetzung: **Docker** mit Compose-Plugin.
 
 ```bash
-git clone <repo-url> notebooklm-clone
+git clone https://github.com/ikonclast/notebooklm-clone
 cd notebooklm-clone
 docker compose up
 ```
+Jeder weitere Start ist sofort bereit (kein erneuter Download).
+Danach auch im Hintergrund startbar: `docker compose up -d`
 
 Beim **ersten** Start lädt der Stack das lokale Sprachmodell `llama3.2:3b`
 (~2 GB) in ein persistentes Volume. Danach:
