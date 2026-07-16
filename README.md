@@ -8,6 +8,12 @@ nichts, sagt sie es ehrlich — statt zu halluzinieren.
 Default-Betrieb ist **vollständig lokal** (Ollama als LLM): kein API-Key, kein
 Cloud-Dienst, kein Byte verlässt die Infrastruktur — DSGVO-konform out of the box.
 
+## Screenshots
+
+![NotebookLM Clone – belegte Antwort mit anklickbaren Quellen-Chips](docs/screenshot-chat.png)
+
+*Eine Frage an die eigenen Dokumente: Die Antwort nennt ihre Quelle direkt im Text, und jede Aussage ist über anklickbare Quellen-Chips belegt — mit Originaltextstelle, Seitenzahl und Score. Findet das Retrieval keine passende Stelle, antwortet die App „nicht vorhanden" statt zu halluzinieren.*
+
 ---
 
 ## Schnellstart
